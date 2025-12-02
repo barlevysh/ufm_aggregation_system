@@ -24,13 +24,14 @@ class UfmAggregatorWebApp:
   @asynccontextmanager
   async def __telemetry_lifespan(self, app: FastAPI):
     """
-    An asynchronous context manager for managing the application lifespan.
+    An asynchronous context manager for managing the telemetry application lifespan.
     pre 'yield' instruction will run on startup.
     post 'yield' instruction will run on shutdown.
     """
-    app.state.ufm_agggregator = UfmAggregatorServer(self.__performance_store, self.__telemetry_store)
-    app.state.ufm_agggregator.start()
+    app.state.ufm_aggregator = UfmAggregatorServer(self.__performance_store, self.__telemetry_store)
+    app.state.ufm_aggregator.start()
     yield
+    await app.state.ufm_aggregator.stop()
 
   def create_telemetry_app(self):
     telemetry_app = FastAPI(lifespan=self.__telemetry_lifespan)
@@ -52,6 +53,8 @@ class UfmAggregatorWebApp:
         value = await self.__telemetry_store.get_metric(switch_name, metric)
         return JSONResponse({'switch_name': switch_name, 'metric': metric, 'value': value})
       except KeyError as e:
+        self.__logger.info("Failed to find metric '{metric}' for switch '{switch_name}")
+        self.__performance_store.update_total_api_requests_failures()
         raise HTTPException(status_code=404, detail=str(e))
 
     @telemetry_app.get('/telemetry/list_metrics')

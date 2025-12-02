@@ -32,6 +32,7 @@ class UfmAggregatorServer:
     self.__logger = logging.getLogger('Ufm-Aggregator-Server')
     self.__performance_store = performance_store
     self.__telemetry_store = telemetry_store
+    self.__ingester_task = None
 
   def __config_logging(self):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s',
@@ -73,4 +74,12 @@ class UfmAggregatorServer:
       await asyncio.sleep(self.POLL_INTERVAL)
 
   def start(self):
-    asyncio.create_task(self.__ingester())
+    self.__ingester_task = asyncio.create_task(self.__ingester())
+
+  async def stop(self):
+    if self.__ingester_task:
+      self.__ingester_task.cancel()
+    try:
+      await self.__ingester_task
+    except asyncio.CancelledError:
+      self.__logger.warning("Failed stopping ingestion task gracefuly")
